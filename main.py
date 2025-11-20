@@ -1,60 +1,83 @@
 from crewai.flow.flow import Flow, listen, start, router, and_, or_
 from pydantic import BaseModel
 
-class MyState(BaseModel):
-    user_id : int = 1
-    is_admin : bool = False
 
-class MyFirstFlow(Flow[MyState]):
+class ContentPipelineState(BaseModel):
+
+    # Input
+    content_type : str = ""
+    topic : str = ""
+
+    # Internal
+    max_length : int = 0
+    
+
+
+class ContentPipelineFlow(Flow[ContentPipelineState]):
 
     @start()
-    def first(self):
-        print(self.state.user_id)
-        print("Hello, World!")
-        return "first_done"
+    def init_content_pipeline(self):
+        print(self.state.content_type)
+        print(self.state.topic)
 
-
-    @listen(first)
-    def second(self):
-        print("This is the second step after the first.")
-        return "second_done"
-
-    @listen(first)
-    def third(self):
-        print("This is the third step after the first.")
-        return "third_done"
-
-    @listen(and_(second, third))
-    def final(self):
-        print("All steps completed!")
-        self.state.user_id = 100
-        return "all_done"
-    
-    @router(final)
-    def route(self):
-        a = 2
-
-        if a % 2 == 0:
-            return "even"
-        else:
-            return "odd"
+        if self.state.content_type not in ["blog", "tweet", "linkedin"]:
+            raise ValueError("Unsupported content type")
         
+
+        if self.state.content_type == "tweet":
+            self.state.max_length = 150
+        elif self.state.content_type == "linkedin":
+            self.state.max_length = 500
+        else:
+            self.state.max_length = 800
+        
+
+    @listen(init_content_pipeline)
+    def conduct_research(self):
+        print("Researching..")
+        return True
     
-    @listen('even')
-    def even_path(self):
-        print(self.state.user_id)
+    @router(conduct_research)
+    def router(self):
+        if self.state.content_type == "blog":
+            return "make_blog"
+        elif self.state.content_type == "tweet":
+            return "make_tweet"
+        else:
+            return "make_linkedin"
+        
+    @listen("make_blog")
+    def handle_make_blog(self):
+        print(f"Creating a blog on {self.state.topic} with max length {self.state.max_length}")
+    
+    @listen("make_tweet")
+    def handle_make_tweet(self):
+        print(f"Creating a tweet on {self.state.topic} with max length {self.state.max_length}")
+    
+    @listen("make_linkedin")
+    def handle_make_linkedin(self):
+        print(f"Creating a linkedin post on {self.state.topic} with max length {self.state.max_length}")
 
-        print("The number is even.")
+    @listen(or_(handle_make_tweet, handle_make_linkedin))
+    def check_varality(self):
+        print("Checking validity..")
 
-    @listen('odd')
-    def odd_path(self):
-        print("The number is odd.")
+    @listen(handle_make_blog)
+    def check_seo(self):
+        print("Checking SEO..")   
 
+    @listen(or_(check_varality, check_seo))
+    def finalize_content(self):
+        print("Finalizing content..")   
+    
+    
+flow = ContentPipelineFlow()
 
-flow = MyFirstFlow()
+flow.plot()
 
-# flow.plot()
-
-result = flow.kickoff()
-print(f"\nFlow result: {result}")
-
+# flow.kickoff(
+#     inputs={
+#         "content_type": "tweet",
+#         "topic": "AI"
+#     }
+# )
