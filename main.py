@@ -1,83 +1,110 @@
 from crewai.flow.flow import Flow, listen, start, router, and_, or_
 from pydantic import BaseModel
-
-
 class ContentPipelineState(BaseModel):
 
-    # Input
-    content_type : str = ""
-    topic : str = ""
+    # Inputs
+    content_type: str = ""
+    topic: str = ""
 
     # Internal
-    max_length : int = 0
-    
+    max_length: int = 0
+    score: int = 0
+
+    # Content
+    blog_post: str = ""
+    tweet: str = ""
+    linkedin_post: str = ""
 
 
 class ContentPipelineFlow(Flow[ContentPipelineState]):
 
     @start()
     def init_content_pipeline(self):
-        print(self.state.content_type)
-        print(self.state.topic)
 
-        if self.state.content_type not in ["blog", "tweet", "linkedin"]:
-            raise ValueError("Unsupported content type")
-        
+        if self.state.content_type not in ["tweet", "blog", "linkedin"]:
+            raise ValueError("The content type is wrong.")
+
+        if self.topic == "":
+            raise ValueError("The topic can't be blank.")
 
         if self.state.content_type == "tweet":
             self.state.max_length = 150
+        elif self.state.content_type == "blog":
+            self.state.max_length = 800
         elif self.state.content_type == "linkedin":
             self.state.max_length = 500
-        else:
-            self.state.max_length = 800
-        
 
     @listen(init_content_pipeline)
     def conduct_research(self):
-        print("Researching..")
+        print("Researching....")
         return True
-    
+
     @router(conduct_research)
-    def router(self):
-        if self.state.content_type == "blog":
+    def conduct_research_router(self):
+        content_type = self.state.content_type
+
+        if content_type == "blog":
             return "make_blog"
-        elif self.state.content_type == "tweet":
+        elif content_type == "tweet":
             return "make_tweet"
         else:
-            return "make_linkedin"
-        
-    @listen("make_blog")
-    def handle_make_blog(self):
-        print(f"Creating a blog on {self.state.topic} with max length {self.state.max_length}")
-    
-    @listen("make_tweet")
-    def handle_make_tweet(self):
-        print(f"Creating a tweet on {self.state.topic} with max length {self.state.max_length}")
-    
-    @listen("make_linkedin")
-    def handle_make_linkedin(self):
-        print(f"Creating a linkedin post on {self.state.topic} with max length {self.state.max_length}")
+            return "make_linkedin_post"
 
-    @listen(or_(handle_make_tweet, handle_make_linkedin))
-    def check_varality(self):
-        print("Checking validity..")
+    @listen(or_("make_blog", "remake_blog"))
+    def handle_make_blog(self):
+        # if blog post has been made, show the old one to the ai and ask it to improve, else
+        # just ask to create.
+        print("Making blog post...")
+
+    @listen(or_("make_tweet", "remake_tweet"))
+    def handle_make_tweet(self):
+        # if tweet has been made, show the old one to the ai and ask it to improve, else
+        # just ask to create.
+        print("Making tweet...")
+
+    @listen(or_("make_linkedin_post", "remake_linkedin_post"))
+    def handle_make_linkedin_post(self):
+        # if post has been made, show the old one to the ai and ask it to improve, else
+        # just ask to create.
+        print("Making linkedin post...")
 
     @listen(handle_make_blog)
     def check_seo(self):
-        print("Checking SEO..")   
+        print("Checking Blog SEO")
 
-    @listen(or_(check_varality, check_seo))
+    @listen(or_(handle_make_tweet, handle_make_linkedin_post))
+    def check_virality(self):
+        print("Checking virality...")
+
+    @router(or_(check_seo, check_virality))
+    def score_router(self):
+
+        content_type = self.state.content_type
+        score = self.state.score
+
+        if score >= 8:
+            return "check_passed"
+        else:
+            if content_type == "blog":
+                return "remake_blog"
+            elif content_type == "linkedin":
+                return "remake_linkedin_post"
+            else:
+                return "remake_tweet"
+
+    @listen("check_passed")
     def finalize_content(self):
-        print("Finalizing content..")   
-    
-    
-flow = ContentPipelineFlow()
+        print("Finalizing content")
 
-flow.plot()
+
+flow = ContentPipelineFlow()
 
 # flow.kickoff(
 #     inputs={
 #         "content_type": "tweet",
-#         "topic": "AI"
-#     }
+#         "topic": "AI Dog Training",
+#     },
 # )
+
+
+flow.plot()
