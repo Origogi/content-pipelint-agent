@@ -90,43 +90,42 @@ class ContentPipelineFlow(Flow[ContentPipelineState]):
     def handle_make_blog(self):
         blog_post = self.state.blog_post
 
-        llm = LLM(model="openai/o4-mini", response_format=BlogPost)
-
+        llm = LLM(model="openai/gpt-4o-mini")
 
         if blog_post:
-            self.state.blog_post = llm.call(f"""
-                You wrote this blog post on {self.state.topic}, but it does not a good SEO score. 
+            prompt = f"""
+                You wrote this blog post on {self.state.topic}, but it does not have a good SEO score
                 because of {self.state.score.reasone}
-                
+
                 Improve it
                 <blog post>
                 {self.state.blog_post.model_dump_json()}
                 </blog post>
-                Make a blog post on the topic {self.state.topic} using the following research:
 
+                Use the following research:
                 <research>
                 ==================
                 {self.state.research}
                 ==================
-                </research
+                </research>
 
-            
+                Create an improved blog post.
             """
-            )
-            
         else:
-            self.state.blog_post = llm.call(f"""
+            prompt = f"""
                 Make a blog post on the topic {self.state.topic} using the following research:
 
                 <research>
                 ==================
                 {self.state.research}
                 ==================
-                </research
+                </research>
 
-            
+                Create a compelling blog post.
             """
-            )
+
+        # Use response_model parameter in call() method
+        self.state.blog_post = llm.call(prompt, response_model=BlogPost)
         
 
     @listen(or_("make_tweet", "remake_tweet"))
@@ -144,6 +143,9 @@ class ContentPipelineFlow(Flow[ContentPipelineState]):
     @listen(handle_make_blog)
     def check_seo(self):
         print(self.state.blog_post)
+        # print(self.state.blog_post.subtitle)
+
+        # print(self.state.blog_post.sections)
         # print(self.state.blog_post)
         # print("=================")
         # print(self.state.research)
@@ -156,18 +158,19 @@ class ContentPipelineFlow(Flow[ContentPipelineState]):
     @router(or_(check_seo, check_virality))
     def score_router(self):
 
-        content_type = self.state.content_type
-        score = self.state.score
+        return "check_passed"
+        # content_type = self.state.content_type
+        # score = self.state.score
 
-        if score.value >=8:
-            return "check_passed"
+        # if score.value >=8:
+        #     return "check_passed"
    
-        if content_type == "blog":
-            return "remake_blog"
-        elif content_type == "linkedin":
-            return "remake_linkedin_post"
-        else:
-            return "remake_tweet"
+        # if content_type == "blog":
+        #     return "remake_blog"
+        # elif content_type == "linkedin":
+        #     return "remake_linkedin_post"
+        # else:
+        #     return "remake_tweet"
 
     @listen("check_passed")
     def finalize_content(self):
@@ -179,6 +182,6 @@ flow = ContentPipelineFlow()
 flow.kickoff(
     inputs={
         "content_type": "blog",
-        "topic": "AI Dog Training",
+        "topic": "Xenoblade2",
     },
 )
