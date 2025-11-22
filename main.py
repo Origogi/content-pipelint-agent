@@ -29,6 +29,7 @@ class ContentPipelineState(BaseModel):
     # Inputs
     content_type: str = ""
     topic: str = ""
+    llm_provider: str = "gemini"  # "openai" or "gemini"
 
     # Internal
     max_length: int = 0
@@ -90,12 +91,16 @@ class ContentPipelineFlow(Flow[ContentPipelineState]):
     def handle_make_blog(self):
         blog_post = self.state.blog_post
 
-        llm = LLM(model="openai/gpt-4o-mini")
+        # Select LLM based on provider
+        if self.state.llm_provider == "openai":
+            llm = LLM(model="openai/gpt-4o-mini")
+        else:
+            llm = LLM(model="gemini/gemini-2.0-flash-exp")
 
         if blog_post:
             prompt = f"""
                 You wrote this blog post on {self.state.topic}, but it does not have a good SEO score
-                because of {self.state.score.reasone}
+                because of {self.state.score.reason}
 
                 Improve it
                 <blog post>
@@ -142,13 +147,10 @@ class ContentPipelineFlow(Flow[ContentPipelineState]):
 
     @listen(handle_make_blog)
     def check_seo(self):
+        print("=======================")
         print(self.state.blog_post)
-        # print(self.state.blog_post.subtitle)
-
-        # print(self.state.blog_post.sections)
-        # print(self.state.blog_post)
-        # print("=================")
-        # print(self.state.research)
+        print("=======================")
+        print(self.state.research)
         print("Checking Blog SEO")
 
     @listen(or_(handle_make_tweet, handle_make_linkedin_post))
@@ -182,6 +184,7 @@ flow = ContentPipelineFlow()
 flow.kickoff(
     inputs={
         "content_type": "blog",
-        "topic": "Xenoblade2",
+        "topic": "xenoblade 2",
+        "llm_provider": "openai",  # "openai" or "gemini"
     },
 )

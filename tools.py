@@ -38,7 +38,7 @@ def web_search_tool(query: str):
                 "url": result.metadata.url,
                 "markdown": cleaned,
             }
-        cleaned_chunks.append(cleaned_result)
+            cleaned_chunks.append(cleaned_result)
 
     print(cleaned_chunks)
     return cleaned_chunks
