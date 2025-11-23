@@ -3,6 +3,7 @@ from crewai.agent import Agent
 from crewai import LLM
 from pydantic import BaseModel
 from tools import web_search_tool
+from seo_crew import SeoCrew
 
 
 class BlogPost(BaseModel):
@@ -12,7 +13,7 @@ class BlogPost(BaseModel):
 
 class Score(BaseModel):
     value : int
-    reasone : str
+    reason : str
 
 class Tweet(BaseModel):
     content : str
@@ -127,8 +128,11 @@ class ContentPipelineFlow(Flow[ContentPipelineState]):
                 </research>
             """
 
-        result= llm.call(prompt, response_model=BlogPost)
-        self.state.blog_post = BlogPost.model_validate_json(result)     
+        result = llm.call(prompt, response_model=BlogPost)
+        if isinstance(result, str):
+            self.state.blog_post = BlogPost.model_validate_json(result)
+        else:
+            self.state.blog_post = result     
 
     @listen(or_("make_tweet", "remake_tweet"))
     def handle_make_tweet(self):
@@ -170,8 +174,11 @@ class ContentPipelineFlow(Flow[ContentPipelineState]):
                 </research>
             """
 
-        result= llm.call(prompt, response_model=Tweet)
-        self.state.tweet = Tweet.model_validate_json(result) 
+        result = llm.call(prompt, response_model=Tweet)
+        if isinstance(result, str):
+            self.state.tweet = Tweet.model_validate_json(result)
+        else:
+            self.state.tweet = result 
 
     @listen(or_("make_linkedin_post", "remake_linkedin_post"))
     def handle_make_linkedin_post(self):
@@ -211,17 +218,35 @@ class ContentPipelineFlow(Flow[ContentPipelineState]):
                 </research>
             """
 
-        result= llm.call(prompt, response_model=LinkedInPost)
-        self.state.linkedin_post = LinkedInPost.model_validate_json(result) 
+        result = llm.call(prompt, response_model=LinkedInPost)
+        if isinstance(result, str):
+            self.state.linkedin_post = LinkedInPost.model_validate_json(result)
+        else:
+            self.state.linkedin_post = result 
 
 
     @listen(handle_make_blog)
     def check_seo(self):
-        print("=======================")
-        print(self.state.blog_post)
-        print("=======================")
-        print(self.state.research)
-        print("Checking Blog SEO")
+        # Convert blog post to a readable string format
+        blog_post_dict = self.state.blog_post.model_dump()
+        blog_post_text = f"""
+        Title: {blog_post_dict['title']}
+        Subtitle: {blog_post_dict['subtitle']}
+        Sections: {' '.join(blog_post_dict['sections'])}
+        """
+
+        result = (
+            SeoCrew()
+            .crew()
+            .kickoff(
+                inputs={
+                    "topic": self.state.topic,
+                    "blog_post": blog_post_text,
+                }
+            )
+        )
+
+        self.state.score = result.pydantic
 
     @listen(or_(handle_make_tweet, handle_make_linkedin_post))
     def check_virality(self):
@@ -232,19 +257,20 @@ class ContentPipelineFlow(Flow[ContentPipelineState]):
     @router(or_(check_seo, check_virality))
     def score_router(self):
 
-        return "check_passed"
-        # content_type = self.state.content_type
-        # score = self.state.score
+        content_type = self.state.content_type
+        score = self.state.score
 
-        # if score.value >=8:
-        #     return "check_passed"
-   
-        # if content_type == "blog":
-        #     return "remake_blog"
-        # elif content_type == "linkedin":
-        #     return "remake_linkedin_post"
-        # else:
-        #     return "remake_tweet"
+        print("Score: ", score)
+
+        if score.value >=8:
+            return "check_passed"
+
+        if content_type == "blog":
+            return "remake_blog"
+        elif content_type == "linkedin":
+            return "remake_linkedin_post"
+        else:
+            return "remake_tweet"
 
     @listen("check_passed")
     def finalize_content(self):
@@ -255,7 +281,7 @@ flow = ContentPipelineFlow()
 
 flow.kickoff(
     inputs={
-        "content_type": "linkedin",
+        "content_type": "blog",
         "topic": "xenoblade 2",
         "llm_provider": "openai",  # "openai" or "gemini"
     },

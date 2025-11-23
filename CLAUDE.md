@@ -54,10 +54,11 @@ uv run python main.py
 
 #### State Models (main.py)
 - `BlogPost`: title, subtitle, sections
-- `Score`: value, reasone (typo 존재)
+- `Score`: value, reason
 - `Tweet`: content, hashtags
 - `LinkedInPost`: hook, content, call_to_action
 - `ContentPipelineState`: 전체 파이프라인 상태
+  - `llm_provider`: LLM 제공자 선택 ("openai" 또는 "gemini")
 
 #### Tools (tools.py)
 - `web_search_tool`: Firecrawl을 사용한 웹 검색 및 마크다운 스크래핑
@@ -70,6 +71,15 @@ uv run python main.py
   - OpenAI: `gpt-4o-mini`
   - Google Gemini: `gemini-2.0-flash-exp` (기본값)
 - `llm_provider` 파라미터로 실행 시 선택 ("openai" 또는 "gemini")
+- **중요**: `llm.call()`의 반환 타입은 문자열(JSON)일 수 있으므로 `isinstance()` 체크 후 파싱 필요
+
+#### SEO Crew (seo_crew.py)
+- `SeoCrew`: CrewAI의 `@CrewBase` 데코레이터를 사용한 SEO 분석 Crew
+- `seo_expert`: SEO 전문가 Agent
+- `seo_audit`: 블로그 포스트 SEO 분석 Task
+  - 0-10 점수 평가 및 이유 제공
+  - `output_pydantic=Score`로 구조화된 출력
+- **주의**: Task의 `agent` 파라미터에 `self.agent_name()` 형태로 호출 필요
 
 ### 개발 시 주의사항
 
@@ -87,11 +97,28 @@ uv run python main.py
 
 ## 파일 구조
 - `main.py`: 메인 Flow 정의 및 실행
+- `seo_crew.py`: SEO 분석을 위한 CrewAI Crew 정의
 - `tools.py`: CrewAI 도구 정의 (web_search_tool)
 - `flow_sample.py`: Flow 패턴 학습용 샘플 코드
 - `.env`: API 키 환경 변수
 
-## 알려진 이슈
+## 구현 완료 기능
 
-- SEO/바이럴성 체크 로직이 아직 구현되지 않음 (placeholder만 존재)
-- Remake 로직이 주석 처리됨
+✅ **콘텐츠 생성**
+- 블로그 포스트 생성 (LLM structured output)
+- 트윗 생성 (LLM structured output)
+- LinkedIn 포스트 생성 (LLM structured output)
+
+✅ **품질 검증**
+- 블로그 SEO 점수 확인 (SeoCrew 사용)
+- Score 기반 자동 재생성 로직 (score < 8일 경우)
+
+✅ **기타**
+- 웹 검색을 통한 리서치 (Firecrawl)
+- OpenAI/Gemini 선택 가능
+
+## 미구현 기능
+
+❌ **품질 검증**
+- 트윗 바이럴성 체크 (placeholder만 존재)
+- LinkedIn 포스트 바이럴성 체크 (placeholder만 존재)
