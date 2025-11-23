@@ -118,32 +118,102 @@ class ContentPipelineFlow(Flow[ContentPipelineState]):
             """
         else:
             prompt = f"""
-                Make a blog post on the topic {self.state.topic} using the following research:
+                Make a blog post with SEO practices on the topic {self.state.topic} using the following research:
 
                 <research>
                 ==================
                 {self.state.research}
                 ==================
                 </research>
-
-                Create a compelling blog post.
             """
 
-        # Use response_model parameter in call() method
-        self.state.blog_post = llm.call(prompt, response_model=BlogPost)
-        
+        result= llm.call(prompt, response_model=BlogPost)
+        self.state.blog_post = BlogPost.model_validate_json(result)     
 
     @listen(or_("make_tweet", "remake_tweet"))
     def handle_make_tweet(self):
-        # if tweet has been made, show the old one to the ai and ask it to improve, else
-        # just ask to create.
-        print("Making tweet...")
+        tweet = self.state.tweet
+
+        # Select LLM based on provider
+        if self.state.llm_provider == "openai":
+            llm = LLM(model="openai/gpt-4o-mini")
+        else:
+            llm = LLM(model="gemini/gemini-2.0-flash-exp")
+
+        if tweet:
+            prompt = f"""
+                You wrote this tweet on {self.state.topic}, but it does not have a good viral score
+                because of {self.state.score.reason}
+
+                Improve it
+                <tweet>
+                {self.state.tweet.model_dump_json()}
+                </tweet>
+
+                Use the following research:
+                <research>
+                ==================
+                {self.state.research}
+                ==================
+                </research>
+
+                Create an improved tweet.
+            """
+        else:
+            prompt = f"""
+                Make a tweet that a can go viral on the topic {self.state.topic} using the following research:
+
+                <research>
+                ==================
+                {self.state.research}
+                ==================
+                </research>
+            """
+
+        result= llm.call(prompt, response_model=Tweet)
+        self.state.tweet = Tweet.model_validate_json(result) 
 
     @listen(or_("make_linkedin_post", "remake_linkedin_post"))
     def handle_make_linkedin_post(self):
-        # if post has been made, show the old one to the ai and ask it to improve, else
-        # just ask to create.
-        print("Making linkedin post...")
+        linkedin_post = self.state.linkedin_post
+
+        # Select LLM based on provider
+        if self.state.llm_provider == "openai":
+            llm = LLM(model="openai/gpt-4o-mini")
+        else:
+            llm = LLM(model="gemini/gemini-2.0-flash-exp")
+
+        if linkedin_post:
+            prompt = f"""
+                You wrote this linkedin post on {self.state.topic}, but it does not have a good viral score
+                because of {self.state.score.reason}
+
+                Improve it
+                <linkedin post>
+                {self.state.linkedin_post.model_dump_json()}
+                </linkedin post>
+
+                Use the following research:
+                <research>
+                ==================
+                {self.state.research}
+                ==================
+                </research>
+            """
+        else:
+            prompt = f"""
+                Make a linkedin post that can go viral on the topic {self.state.topic} using the following research:
+
+                <research>
+                ==================
+                {self.state.research}
+                ==================
+                </research>
+            """
+
+        result= llm.call(prompt, response_model=LinkedInPost)
+        self.state.linkedin_post = LinkedInPost.model_validate_json(result) 
+
 
     @listen(handle_make_blog)
     def check_seo(self):
@@ -155,6 +225,8 @@ class ContentPipelineFlow(Flow[ContentPipelineState]):
 
     @listen(or_(handle_make_tweet, handle_make_linkedin_post))
     def check_virality(self):
+        print(self.state.tweet)
+        print(self.state.linkedin_post)
         print("Checking virality...")
 
     @router(or_(check_seo, check_virality))
@@ -183,7 +255,7 @@ flow = ContentPipelineFlow()
 
 flow.kickoff(
     inputs={
-        "content_type": "blog",
+        "content_type": "linkedin",
         "topic": "xenoblade 2",
         "llm_provider": "openai",  # "openai" or "gemini"
     },
