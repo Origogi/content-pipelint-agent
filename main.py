@@ -4,6 +4,7 @@ from crewai import LLM
 from pydantic import BaseModel
 from tools import web_search_tool
 from seo_crew import SeoCrew
+from virality_crew import ViralityCrew
 
 
 class BlogPost(BaseModel):
@@ -39,8 +40,8 @@ class ContentPipelineState(BaseModel):
 
     # Content
     blog_post: BlogPost | None = None
-    tweet: str = ""
-    linkedin_post: str = ""
+    tweet: Tweet | None = None
+    linkedin_post: LinkedInPost | None = None
 
 
 class ContentPipelineFlow(Flow[ContentPipelineState]):
@@ -94,7 +95,7 @@ class ContentPipelineFlow(Flow[ContentPipelineState]):
 
         # Select LLM based on provider
         if self.state.llm_provider == "openai":
-            llm = LLM(model="openai/gpt-4o-mini")
+            llm = LLM(model="openai/gpt-4o")
         else:
             llm = LLM(model="gemini/gemini-2.0-flash-exp")
 
@@ -140,7 +141,7 @@ class ContentPipelineFlow(Flow[ContentPipelineState]):
 
         # Select LLM based on provider
         if self.state.llm_provider == "openai":
-            llm = LLM(model="openai/gpt-4o-mini")
+            llm = LLM(model="openai/gpt-4o")
         else:
             llm = LLM(model="gemini/gemini-2.0-flash-exp")
 
@@ -186,7 +187,7 @@ class ContentPipelineFlow(Flow[ContentPipelineState]):
 
         # Select LLM based on provider
         if self.state.llm_provider == "openai":
-            llm = LLM(model="openai/gpt-4o-mini")
+            llm = LLM(model="openai/gpt-4o")
         else:
             llm = LLM(model="gemini/gemini-2.0-flash-exp")
 
@@ -227,21 +228,13 @@ class ContentPipelineFlow(Flow[ContentPipelineState]):
 
     @listen(handle_make_blog)
     def check_seo(self):
-        # Convert blog post to a readable string format
-        blog_post_dict = self.state.blog_post.model_dump()
-        blog_post_text = f"""
-        Title: {blog_post_dict['title']}
-        Subtitle: {blog_post_dict['subtitle']}
-        Sections: {' '.join(blog_post_dict['sections'])}
-        """
-
         result = (
             SeoCrew()
             .crew()
             .kickoff(
                 inputs={
                     "topic": self.state.topic,
-                    "blog_post": blog_post_text,
+                    "blog_post": self.state.blog_post.model_dump_json(indent=2),
                 }
             )
         )
@@ -250,9 +243,25 @@ class ContentPipelineFlow(Flow[ContentPipelineState]):
 
     @listen(or_(handle_make_tweet, handle_make_linkedin_post))
     def check_virality(self):
-        print(self.state.tweet)
-        print(self.state.linkedin_post)
-        print("Checking virality...")
+        content = (
+            self.state.tweet.model_dump_json(indent=2)
+            if self.state.content_type == "tweet"
+            else self.state.linkedin_post.model_dump_json(indent=2)
+        )
+
+        result = (
+            ViralityCrew()
+            .crew()
+            .kickoff(
+                inputs={
+                    "topic": self.state.topic,
+                    "content_type": self.state.content_type,
+                    "content": content,
+                }
+            )
+        )
+
+        self.state.score = result.pydantic
 
     @router(or_(check_seo, check_virality))
     def score_router(self):
@@ -262,7 +271,7 @@ class ContentPipelineFlow(Flow[ContentPipelineState]):
 
         print("Score: ", score)
 
-        if score.value >=8:
+        if score.value >=7:
             return "check_passed"
 
         if content_type == "blog":
@@ -275,6 +284,10 @@ class ContentPipelineFlow(Flow[ContentPipelineState]):
     @listen("check_passed")
     def finalize_content(self):
         print("Finalizing content")
+        print("==================")
+        print(self.state.blog_post)
+        print(self.state.tweet)
+        print(self.state.linkedin_post)
 
 
 flow = ContentPipelineFlow()
